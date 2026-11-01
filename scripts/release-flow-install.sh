@@ -95,8 +95,14 @@ fi
 bundle_version="$(jq -r '.bundle_version // empty' "${manifest}")"
 source_commit="$(jq -r '.source_commit // empty' "${manifest}")"
 workflow_mode="$(jq -r '.workflow_mode // "vendored"' "${manifest}")"
+profile="$(jq -r 'if has("profile") then .profile else "full" end' "$manifest")"
 [[ "${source_commit}" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid bundle source_commit' >&2; exit 1; }
 case "${workflow_mode}" in vendored|reusable) ;; *) echo 'Invalid bundle workflow_mode' >&2; exit 1 ;; esac
+case "$profile" in full|github) ;; *) echo 'Invalid bundle profile' >&2; exit 1 ;; esac
+if [[ "$profile" == github && "$workflow_mode" != reusable ]]; then
+  echo 'GitHub profile requires reusable workflows' >&2
+  exit 1
+fi
 
 # rows <file> <array-key>: "path<TAB>sha256<TAB>mode" per entry.
 rows() {
@@ -173,6 +179,7 @@ if [[ -L "${lock_file}" || ( -e "${lock_file}" && ! -f "${lock_file}" ) ]]; then
   exit 1
 fi
 lock_version=""
+lock_profile=full
 lock_tsv=""
 if [[ -f "${lock_file}" ]]; then
   if ! jq -e '.schema_version == 1 and (.files | type) == "array"' "${lock_file}" >/dev/null 2>&1; then
@@ -180,6 +187,8 @@ if [[ -f "${lock_file}" ]]; then
     exit 1
   fi
   lock_version="$(jq -r '.bundle_version // empty' "${lock_file}")"
+  lock_profile="$(jq -r 'if has("profile") then .profile else "full" end' "$lock_file")"
+  case "$lock_profile" in full|github) ;; *) echo 'Invalid installed bundle profile' >&2; exit 1 ;; esac
   lock_tsv="$(rows "${lock_file}" files)"
   while IFS=$'\t' read -r p s m; do
     [[ -n "${p}" ]] || continue
@@ -236,6 +245,25 @@ fi
 if [[ -n "${lock_version}" && "${lock_version}" != "${bundle_version}" && "${upgrade}" != "true" ]]; then
   echo "release-flow bundle already installed ${lock_version}; use --upgrade to install ${bundle_version}" >&2
   exit 1
+fi
+if [[ -n "$lock_version" && "$lock_profile" != "$profile" && "$upgrade" != true ]]; then
+  echo "Installed profile $lock_profile differs from $profile; use --upgrade to change profiles." >&2
+  exit 1
+fi
+
+# Never execute project code to choose the installation. Reject incompatible
+# configured destinations before planning removals or writing any file.
+if [[ "$profile" == github && ( -e "$target_abs/.release-flow.json" || -L "$target_abs/.release-flow.json" ) ]]; then
+  config="$target_abs/.release-flow.json"
+  if [[ -L "$config" || ! -f "$config" ]] || ! jq -e '
+    type=="object" and
+    (.storage.uri == null or ((.storage.uri|type)=="string" and (.storage.uri|startswith("github://")))) and
+    ((.publishers // {})|type)=="object" and
+    ((.publishers // {})|keys|all(.=="github-release"))
+  ' "$config" >/dev/null 2>&1; then
+    echo 'GitHub profile supports only github:// storage and the github-release publisher; use the full bundle for other destinations. Nothing was written.' >&2
+    exit 1
+  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -315,7 +343,9 @@ while IFS=$'\t' read -r p s m; do
     continue
   fi
   [[ -e "${dst}" || -L "${dst}" ]] || continue
-  if [[ -f "${dst}" && ! -L "${dst}" && "$(sha256_of "${dst}")" == "${s}" ]]; then
+  if [[ "$upgrade" != true ]]; then
+    conflicts+=("${p}: no longer shipped; use --upgrade to remove managed files")
+  elif [[ -f "${dst}" && ! -L "${dst}" && "$(sha256_of "${dst}")" == "${s}" ]]; then
     add_plan remove "${p}" "" ""
   else
     conflicts+=("${p}: no longer shipped by bundle ${bundle_version} but modified locally")
@@ -374,8 +404,9 @@ write_tmp="$(mktemp "${lock_file}.tmp.XXXXXX")"
 jq -n \
   --arg version "${bundle_version}" \
   --arg commit "${source_commit}" \
+  --arg profile "$profile" \
   --argjson files "${files_json}" \
-  '{schema_version: 1, bundle_version: $version, source_commit: $commit, files: $files}' > "${write_tmp}"
+  '{schema_version: 1, bundle_version: $version, source_commit: $commit, profile: $profile, files: $files}' > "${write_tmp}"
 mv -f "${write_tmp}" "${lock_file}"
 write_tmp=""
 
@@ -393,6 +424,9 @@ for jf in justfile .justfile Justfile; do
   fi
 done
 echo "release-flow bundle ${bundle_version} installed into ${target_abs}" >&2
+if [[ "$profile" == github ]]; then
+  echo 'GitHub profile: local Just operations and GitHub recovery; other publishers/backends remain in the remote runtime or the full bundle.' >&2
+fi
 if [[ "${workflow_mode}" == reusable ]]; then
   echo "Workflows are pinned to nbari/release@${source_commit}." >&2
   echo "Set .release-flow.json pipeline.repository=nbari/release, pipeline.sha=${source_commit} and promotion.required_job='candidate / Candidate OK'." >&2

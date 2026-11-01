@@ -63,11 +63,38 @@ test "$RF_SHA" = "$RF_SOURCE_SHA"
 bash "$RF_BUNDLE/install.sh" --target "$RF_TARGET"
 ```
 
-The reusable profile requires committed clean runtime sources and installs thin
-callers pinned to `BUNDLE.json.source_commit`. The default builder profile,
+Reusable workflow mode requires committed clean runtime sources and installs thin
+callers pinned to `BUNDLE.json.source_commit`. The default builder mode,
 `--workflow-mode vendored`, remains available for fully vendored workflows; omit
-`pipeline` in that mode. Published Release Flow bundles use the reusable profile.
+`pipeline` in that mode. Published Release Flow bundles use reusable workflows.
 The archive's reproducibility is controlled by source timestamp or `SOURCE_DATE_EPOCH`.
+
+### Smaller GitHub-only installation
+
+For GitHub storage and GitHub Release publishing, add `--profile github` to the
+source bundle command above, together with `--workflow-mode reusable`. It installs
+only the local Just command dependencies: preparation, signed promotion, status,
+candidate management, manifest verification and GitHub recovery, including
+`release-retry --local`. The optional Cargo adapter remains available through
+`install.sh --with-cargo-adapter`.
+
+This profile installs 21 managed files, or 22 with Cargo, instead of the full
+bundle's 36 or 37. The 15 omitted scripts implement remote workflow helpers,
+other publishers/backends and bootstrap tools. Reusable jobs still execute the
+complete framework at the pinned SHA; the smaller consumer does not change those
+jobs or copy their orchestration. Rust builds and the application crate remain
+independent of the local release toolset.
+
+For first-time GitHub storage setup, use `scripts/storage/github-bootstrap.sh`
+from the same clean pinned framework checkout; it is not installed by this
+profile. Follow [GitHub storage setup](GITHUB_STORAGE.md) before production.
+
+The default `--profile full` retains all existing features, including S3,
+filesystem storage and every publisher. The GitHub profile rejects an existing
+configuration selecting those destinations. Switching profiles requires
+`install.sh --upgrade`; it removes only checksum-matching managed files and
+refuses locally edited files before changing anything. To restore other local
+capabilities, build the full profile and upgrade through the same installer.
 
 ### Configure acme/hello
 

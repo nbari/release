@@ -7,7 +7,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF' >&2
-Usage: release-flow-bundle.sh --version X.Y.Z --out DIR [--workflow-mode vendored|reusable]
+Usage: release-flow-bundle.sh --version X.Y.Z --out DIR [--workflow-mode vendored|reusable] [--profile full|github]
 EOF
   exit 2
 }
@@ -51,6 +51,32 @@ PAYLOAD=(
   .github/workflows/candidate.yml
   .github/workflows/release.yml
 )
+# Local dependency closure for GitHub-only consumers of the reusable workflows.
+# Remote candidate/publisher jobs execute the complete pinned framework runtime.
+# Keep local GitHub publishing too, so release-retry --local remains supported.
+GITHUB_PAYLOAD=(
+  .justfiles/deploy.just
+  scripts/release-deploy.sh
+  scripts/release-prepare.sh
+  scripts/release-promote.sh
+  scripts/release-status.sh
+  scripts/release-candidates.sh
+  scripts/release-retry.sh
+  scripts/verify-candidate.sh
+  scripts/lib/common.sh
+  scripts/lib/github.sh
+  scripts/lib/schema.sh
+  scripts/lib/tag.sh
+  scripts/storage/storage.sh
+  scripts/storage/backends/github.sh
+  scripts/publication/latest.sh
+  scripts/publication/ledger.sh
+  scripts/publication/publish.sh
+  scripts/publication/resolve.sh
+  scripts/publishers/github-release.sh
+  .github/workflows/candidate.yml
+  .github/workflows/release.yml
+)
 # Files installed only on request (install.sh --with-cargo-adapter).
 OPTIONAL=(
   scripts/adapters/cargo.sh
@@ -70,8 +96,10 @@ SUPPORT_SRC=(LICENSE scripts/release-flow-install.sh docs/GITHUB_STORAGE.md docs
 version=""
 out_dir=""
 workflow_mode=vendored
+profile=full
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --profile) [[ $# -ge 2 ]] || usage; profile="$2"; shift 2 ;;
     --workflow-mode) [[ $# -ge 2 ]] || usage; workflow_mode="$2"; shift 2 ;;
     --version)
       [[ $# -ge 2 ]] || usage
@@ -90,6 +118,11 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -n "${version}" && -n "${out_dir}" ]] || usage
 case "${workflow_mode}" in vendored|reusable) ;; *) usage ;; esac
+case "$profile" in full|github) ;; *) usage ;; esac
+if [[ "$profile" == github && "$workflow_mode" != reusable ]]; then
+  echo 'The GitHub profile requires --workflow-mode reusable.' >&2
+  exit 2
+fi
 if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "Invalid bundle version: ${version} (expected X.Y.Z)" >&2
   exit 2
@@ -174,7 +207,9 @@ stage_file() {
 }
 
 payload_tsv=""
-for f in "${PAYLOAD[@]}"; do
+selected_payload=("${PAYLOAD[@]}")
+[[ "$profile" != github ]] || selected_payload=("${GITHUB_PAYLOAD[@]}")
+for f in "${selected_payload[@]}"; do
   payload_tsv+="$(stage_file "${f}" "payload/${f}" "${f}")"$'\n'
 done
 optional_tsv=""
@@ -191,6 +226,7 @@ jq -n \
   --arg version "${version}" \
   --arg commit "${source_commit}" \
   --arg workflow_mode "${workflow_mode}" \
+  --arg profile "$profile" \
   --argjson clean "${source_tree_clean}" \
   --argjson payload "$(printf '%s' "${payload_tsv}" | jq -R -s "${tsv_to_json}")" \
   --argjson optional "$(printf '%s' "${optional_tsv}" | jq -R -s "${tsv_to_json}")" \
@@ -200,6 +236,7 @@ jq -n \
     bundle_version: $version,
     source_commit: $commit,
     workflow_mode: $workflow_mode,
+    profile: $profile,
     source_tree_clean: $clean,
     min_just: "1.27.0",
     payload: $payload,

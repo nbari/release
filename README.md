@@ -198,6 +198,9 @@ adapter using the [full adoption guide](docs/ADOPTION.md). The installer checks
 checksums, rejects symlinks/conflicts and records managed ownership. Use
 `install.sh --target . --check` for drift and `--upgrade` for reviewed upgrades.
 Align the Action, callers and configuration pipeline SHA with the bundle source.
+GitHub-only consumers can use the [smaller installation profile](docs/ADOPTION.md#smaller-github-only-installation)
+to omit unused local publishers, storage backends and remote workflow helpers.
+All local Just operations remain available, including signed promotion and recovery.
 
 The existing `release-flow-bundle-*` artifact naming and `.release-flow.json`
 configuration remain compatible. After a first production release exists,

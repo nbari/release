@@ -430,4 +430,102 @@ printf 'check:\n    @false\n' > .justfile
 t_run scripts/adapters/framework.sh verify
 assert_rc nonzero "B15: project check failures propagate"
 cd "$orig_dir"
+
+t_case "B16: GitHub consumer profile removes unused managed runtime safely"
+git -C "$source_repo" checkout -- scripts/lib/common.sh
+t_run bash "$source_repo/scripts/release-flow-bundle.sh" --version 9.9.11 --out "$TF_TMP/github-profile" --workflow-mode reusable --profile github
+assert_rc 0 "B16: clean GitHub profile builds"
+if (( T_RC != 0 )); then t_finish; fi
+github_profile="$(extract_bundle "$T_OUT" "$TF_TMP/github-profile-extract")"
+assert_eq github "$(jq -r .profile "$github_profile/BUNDLE.json")" "B16: profile is explicit"
+assert_eq 21 "$(jq '.payload|length' "$github_profile/BUNDLE.json")" "B16: only the local command dependency set is shipped"
+for omitted in lib/project.sh candidate-guard.sh candidate-manifest.sh candidate-targets.sh pipeline-pin.sh \
+    publication/plan.sh publication/ci-install-oras.sh storage/ci-credentials.sh storage/github-bootstrap.sh \
+    storage/backends/fs.sh storage/backends/s3.sh publishers/crates-io.sh publishers/docs.sh publishers/helm.sh publishers/oci.sh; do
+  assert_eq absent "$(exists "$github_profile/payload/scripts/$omitted")" "B16: excludes $omitted"
+done
+t_run bash "$source_repo/scripts/release-flow-bundle.sh" --version 9.9.11 --out "$TF_TMP/github-vendored" --profile github
+assert_rc 2 "B16: GitHub profile requires centralized reusable workflows"
+t_run bash "$source_repo/scripts/release-flow-bundle.sh" --version 9.9.11 --out "$TF_TMP/unknown-profile" --profile unknown
+assert_rc 2 "B16: unknown profile fails closed"
+
+repo="$(tf_fixture_repo bundle-github-profile)"
+bash "$b2/install.sh" --target "$repo" --with-cargo-adapter >/dev/null 2>&1
+printf '# preserve my edit\n' >> "$repo/scripts/publishers/oci.sh"
+lock_before="$(file_sha "$repo/.release-flow-bundle.json")"
+t_run bash "$github_profile/install.sh" --target "$repo" --upgrade
+assert_rc 1 "B16: locally edited unused script blocks profile upgrade"
+assert_contains "$T_ERR" "publishers/oci.sh" "B16: conflict identifies the edited file"
+assert_eq "$lock_before" "$(file_sha "$repo/.release-flow-bundle.json")" "B16: conflict preserves lock"
+assert_eq present "$(exists "$repo/scripts/candidate-guard.sh")" "B16: conflict removes nothing"
+cp "$b2/payload/scripts/publishers/oci.sh" "$repo/scripts/publishers/oci.sh"
+t_run bash "$github_profile/install.sh" --target "$repo" --upgrade
+assert_rc 0 "B16: full-to-GitHub upgrade succeeds"
+assert_contains "$T_OUT" "removed=15" "B16: removes exactly the unused managed scripts"
+assert_eq 22 "$(jq '.files|length' "$repo/.release-flow-bundle.json")" "B16: optional installed Cargo adapter survives upgrade"
+assert_eq github "$(jq -r .profile "$repo/.release-flow-bundle.json")" "B16: installed profile is recorded"
+assert_eq present "$(exists "$repo/scripts/adapters/cargo.sh")" "B16: keeps generic Cargo support"
+t_run bash "$github_profile/install.sh" --target "$repo" --check
+assert_rc 0 "B16: installed checksums pass"
+t_run bash "$github_profile/install.sh" --target "$repo"
+assert_rc 0 "B16: GitHub install is idempotent"
+t_run bash "$repo/scripts/storage/storage.sh" --uri file:///unused head key
+assert_rc 3 "B16: missing backend fails before use"
+assert_contains "$T_ERR" "full bundle" "B16: explains how to install other backends"
+t_run bash "$b2/install.sh" --target "$repo" --upgrade
+assert_rc 0 "B16: full installation remains available"
+assert_eq present "$(exists "$repo/scripts/storage/backends/s3.sh")" "B16: restores omitted features through installer"
+
+same_version="$(extract_bundle "$TF_TMP/github-profile/release-flow-bundle-9.9.11.tar.gz" "$TF_TMP/github-same-version")"
+jq '.bundle_version="9.9.9"' "$same_version/BUNDLE.json" > "$same_version/BUNDLE.json.tmp"
+mv "$same_version/BUNDLE.json.tmp" "$same_version/BUNDLE.json"
+t_run bash "$same_version/install.sh" --target "$repo"
+assert_rc 1 "B16: changing profile requires explicit upgrade even at same version"
+assert_contains "$T_ERR" "--upgrade" "B16: explains profile change consent"
+assert_eq present "$(exists "$repo/scripts/publishers/oci.sh")" "B16: implicit profile switch removes nothing"
+
+for config in '{"storage":{"uri":"s3://bucket/releases"}}' '{"publishers":{"oci":{}}}'; do
+  repo="$(tf_fixture_repo "bundle-profile-policy-$RANDOM")"
+  printf '%s\n' "$config" > "$repo/.release-flow.json"
+  t_run bash "$github_profile/install.sh" --target "$repo"
+  assert_rc 1 "B16: incompatible consumer configuration is rejected"
+  assert_contains "$T_ERR" "GitHub profile" "B16: reports configuration mismatch"
+  assert_eq absent "$(exists "$repo/.release-flow-bundle.json")" "B16: mismatch writes nothing"
+done
+
+for value in '"unknown"' false; do
+  malformed="$(extract_bundle "$TF_TMP/github-profile/release-flow-bundle-9.9.11.tar.gz" "$TF_TMP/profile-value-$value")"
+  jq --argjson value "$value" '.profile=$value' "$malformed/BUNDLE.json" > "$malformed/BUNDLE.json.tmp"
+  mv "$malformed/BUNDLE.json.tmp" "$malformed/BUNDLE.json"
+  repo="$(tf_fixture_repo "bundle-profile-invalid-$RANDOM")"
+  t_run bash "$malformed/install.sh" --target "$repo"
+  assert_rc 1 "B16: malformed profile metadata is rejected"
+  assert_contains "$T_ERR" 'Invalid bundle profile' "B16: malformed profile does not select full implicitly"
+  assert_eq absent "$(exists "$repo/.release-flow-bundle.json")" "B16: invalid profile writes nothing"
+done
+repo="$(tf_fixture_repo bundle-profile-symlink-config)"
+cp "$repo/.release-flow.json" "$TF_TMP/profile-config-outside.json"
+rm "$repo/.release-flow.json"
+ln -s "$TF_TMP/profile-config-outside.json" "$repo/.release-flow.json"
+t_run bash "$github_profile/install.sh" --target "$repo"
+assert_rc 1 "B16: profile validation rejects a redirected consumer configuration"
+assert_eq absent "$(exists "$repo/.release-flow-bundle.json")" "B16: redirected config writes nothing"
+
+t_case "B17: GitHub profile preserves all three Just deploy commands"
+for recipe in deploy deploy-minor deploy-major; do
+  repo="$(tf_fixture_repo "profile-$recipe")"
+  bash "$github_profile/install.sh" --target "$repo" >/dev/null 2>&1
+  printf "import '.justfiles/deploy.just'\n" > "$repo/.justfile"
+  git -C "$repo" add .
+  git -C "$repo" commit --quiet -m "Install the consumer tooling"
+  git -C "$repo" push --quiet origin sandbox
+  before="$(git -C "$repo" rev-parse HEAD)"
+  t_run just --justfile "$repo/.justfile" --working-directory "$repo" "$recipe"
+  assert_rc 0 "B17: $recipe creates a candidate without omitted scripts"
+  assert_contains "$T_OUT" 'mode=test-only' "B17: $recipe stays test-only on sandbox"
+  case "$recipe" in deploy) expected=0.1.1 ;; deploy-minor) expected=0.2.0 ;; deploy-major) expected=1.0.0 ;; esac
+  assert_contains "$T_OUT" "version=$expected" "B17: $recipe selects the correct version"
+  assert_eq "$before" "$(git -C "$repo" rev-parse HEAD)" "B17: $recipe preserves the base commit"
+  assert_eq 0.1.0 "$(cat "$repo/VERSION")" "B17: $recipe preserves the working version"
+done
 t_finish
