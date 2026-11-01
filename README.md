@@ -66,7 +66,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: nbari/release@5bc18d5f8e58c6be9f61078eaf3290d1d2357150
+      - uses: nbari/release@bf69405c3904bc34e9945665a95ddf152acce4f5
         with:
           operation: validate
           adapter: tools/adapter.sh
@@ -90,7 +90,7 @@ permissions:
   contents: read
 jobs:
   candidate:
-    uses: nbari/release/.github/workflows/candidate.yml@5bc18d5f8e58c6be9f61078eaf3290d1d2357150
+    uses: nbari/release/.github/workflows/candidate.yml@bf69405c3904bc34e9945665a95ddf152acce4f5
     with:
       adapter: tools/adapter.sh
     permissions:
@@ -99,7 +99,7 @@ jobs:
 ```
 
 The canonical publisher is
-`nbari/release/.github/workflows/release.yml@5bc18d5f8e58c6be9f61078eaf3290d1d2357150`.
+`nbari/release/.github/workflows/release.yml@bf69405c3904bc34e9945665a95ddf152acce4f5`.
 [Complete callers](docs/ADOPTION.md#reusable-workflows) include tag triggers and
 per-channel dispatch inputs. Candidate builds receive no publisher secrets.
 Only retention obtains storage write access. Unconfigured channels are skipped;
@@ -181,7 +181,7 @@ reviewed source commit; no release-flow binary or Cargo project is needed:
 RF_TARGET="$(pwd)"
 RF_SOURCE="$(mktemp -d)"
 RF_OUT="$(mktemp -d)"
-RF_SHA=5bc18d5f8e58c6be9f61078eaf3290d1d2357150
+RF_SHA=bf69405c3904bc34e9945665a95ddf152acce4f5
 git clone https://github.com/nbari/release.git "$RF_SOURCE/source"
 git -C "$RF_SOURCE/source" checkout --detach "$RF_SHA"
 test -z "$(git -C "$RF_SOURCE/source" status --porcelain)"
