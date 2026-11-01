@@ -167,7 +167,7 @@ done <<< "$(jq -r '.payload[].path' "${TF_BUNDLE_ROOT}/BUNDLE.json")"
 assert_eq "0" "${missing}" "IN04: every payload file is in the archive"
 cd "${TF_TMP}/in01"
 t_run just --list
-for recipe in deploy deploy-minor deploy-major release-promote release-status release-retry release-candidates release-prune; do
+for recipe in deploy deploy-minor deploy-major deploy-test release-promote release-status release-retry release-candidates release-prune; do
   assert_contains "${T_OUT}" "    ${recipe} " "IN04: installed justfile lists ${recipe}"
 done
 cd "${orig_dir}"

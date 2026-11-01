@@ -81,12 +81,14 @@ assert_candidate() {
   fi
 }
 
-# assert_rejected_unchanged <rc> <stderr-needle> <label> -- runs `just deploy` in $PWD
+# assert_rejected_unchanged <rc> <stderr-needle> <label> [command...]: default just deploy
 assert_rejected_unchanged() {
   local rc="$1" needle="$2" label="$3" repo before
   repo="$(git rev-parse --show-toplevel)"
   before="$(tf_snapshot "${repo}")"
-  t_run just deploy
+  shift 3
+  if [[ $# -eq 0 ]]; then set -- just deploy; fi
+  t_run "$@"
   assert_rc "${rc}" "${label}: exit ${rc}"
   assert_contains "${T_ERR}" "${needle}" "${label}: explains rejection"
   assert_eq "" "${T_OUT}" "${label}: stdout empty"
@@ -103,11 +105,13 @@ assert_rc 0 "D01: just --list succeeds"
 assert_contains "${T_OUT}" "deploy " "D01: lists deploy"
 assert_contains "${T_OUT}" "deploy-minor" "D01: lists deploy-minor"
 assert_contains "${T_OUT}" "deploy-major" "D01: lists deploy-major"
+assert_contains "${T_OUT}" "deploy-test" "D01: lists deploy-test"
 assert_not_contains "${T_OUT}" "deploy::" "D01: no deploy:: namespace"
 t_run just --summary
 assert_contains " ${T_OUT} " " deploy " "D01: deploy is a top-level recipe"
 assert_contains " ${T_OUT} " " deploy-minor " "D01: deploy-minor is a top-level recipe"
 assert_contains " ${T_OUT} " " deploy-major " "D01: deploy-major is a top-level recipe"
+assert_contains " ${T_OUT} " " deploy-test " "D01: deploy-test is a top-level recipe"
 for recipe in release-promote release-status release-retry; do
   assert_contains " ${T_OUT} " " ${recipe} " "D01: ${recipe} is a top-level recipe"
 done
@@ -134,8 +138,8 @@ tf_install_bundle() {
 repo="$(tf_fixture_repo "deploy-bundle" 0.1.0 tf_install_bundle)"
 cd "${repo}"
 assert_eq "present" "$(test -f .release-flow-bundle.json && echo present || echo absent)" "D02: bundle lock committed"
-t_run just deploy
-assert_rc 0 "D02: just deploy succeeds in a bundle-installed repo"
+t_run just deploy-test
+assert_rc 0 "D02: just deploy-test succeeds in a bundle-installed repo"
 assert_eq "test-only" "$(out_kv mode)" "D02: sandbox gives test-only"
 assert_eq "absent" "$(test -e "${TF_TMP}/forbidden-tools.log" && echo present || echo absent)" "D02: no Cargo/Rust tool invoked"
 cd "${orig_dir}"
@@ -159,16 +163,16 @@ EOF
 }
 repo="$(tf_fixture_repo "deploy-settings" 0.1.0 tf_vendor_deploy_settings)"
 cd "${repo}"
-t_run just deploy
+t_run just deploy-test
 assert_rc 0 "D03: deploy succeeds with shell/positional/export/working-directory settings"
 assert_candidate test-only 0.1.1 sandbox "D03"
 cd "${orig_dir}"
 
-t_case "D04: sandbox + deploy -> test-only patch candidate"
+t_case "D04: sandbox + deploy-test -> test-only patch candidate"
 repo="$(tf_fixture_repo "deploy-sandbox-patch" 0.1.0 tf_vendor_deploy)"
 cd "${repo}"
 before_bases="$(base_refs)"
-t_run just deploy
+t_run just deploy-test
 assert_rc 0 "D04: deploy succeeds"
 assert_candidate test-only 0.1.1 sandbox "D04"
 assert_eq "${before_bases}" "$(base_refs)" "D04: main/develop/sandbox unchanged locally and remotely"
@@ -179,19 +183,19 @@ assert_eq "" "$(out_kv ci_url)" "D04: ci_url empty for non-GitHub remote"
 assert_contains "${T_OUT}" $'\nci_url=' "D04: ci_url key present"
 cd "${orig_dir}"
 
-t_case "D05: sandbox + deploy-minor -> test-only minor candidate"
+t_case "D05: sandbox + deploy-test minor -> test-only minor candidate"
 repo="$(tf_fixture_repo "deploy-sandbox-minor" 0.1.0 tf_vendor_deploy)"
 cd "${repo}"
-t_run just deploy-minor
-assert_rc 0 "D05: deploy-minor succeeds"
+t_run just deploy-test minor
+assert_rc 0 "D05: deploy-test minor succeeds"
 assert_candidate test-only 0.2.0 sandbox "D05"
 cd "${orig_dir}"
 
-t_case "D06: sandbox + deploy-major -> test-only major candidate"
+t_case "D06: sandbox + deploy-test major -> test-only major candidate"
 repo="$(tf_fixture_repo "deploy-sandbox-major" 0.1.0 tf_vendor_deploy)"
 cd "${repo}"
-t_run just deploy-major
-assert_rc 0 "D06: deploy-major succeeds"
+t_run just deploy-test major
+assert_rc 0 "D06: deploy-test major succeeds"
 assert_candidate test-only 1.0.0 sandbox "D06"
 cd "${orig_dir}"
 
@@ -248,15 +252,16 @@ git push -u origin trunk --quiet
 git checkout -b playground main --quiet
 git commit --allow-empty -m "Playground commit" --quiet
 git push -u origin playground --quiet
-t_run just deploy
-assert_rc 0 "D09: playground deploy succeeds"
+assert_rejected_unchanged 3 "production deploy requires 'trunk'" "D09 playground production rejected"
+t_run just deploy-test
+assert_rc 0 "D09: playground deploy-test succeeds"
 assert_candidate test-only 0.1.1 playground "D09 playground"
 git checkout trunk --quiet
 t_run just deploy
 assert_rc 0 "D09: trunk deploy succeeds"
 assert_candidate production 0.1.1 trunk "D09 trunk"
 git checkout sandbox --quiet
-assert_rejected_unchanged 3 "Allowed: 'playground' (test-only candidate), 'trunk' (production candidate)." "D09 sandbox"
+assert_rejected_unchanged 3 "production deploy requires 'trunk'. Use 'just deploy-test' on 'playground'" "D09 sandbox"
 cd "${orig_dir}"
 
 t_case "D10: main is rejected without Git changes"
@@ -277,7 +282,7 @@ t_case "D12: Unsupported branch is rejected without Git changes"
 repo="$(tf_fixture_repo "deploy-feature" 0.1.0 tf_vendor_deploy)"
 cd "${repo}"
 git checkout -b feature/x --quiet
-assert_rejected_unchanged 3 "Allowed: 'sandbox' (test-only candidate), 'develop' (production candidate)." "D12"
+assert_rejected_unchanged 3 "production deploy requires 'develop'. Use 'just deploy-test' on 'sandbox'" "D12"
 cd "${orig_dir}"
 
 t_case "D13: Checked-out candidate branch is rejected without Git changes"
@@ -308,6 +313,7 @@ cd "${orig_dir}"
 t_case "D15: Uncommitted changes are rejected before any fetch"
 repo="$(tf_fixture_repo "deploy-dirty" 0.1.0 tf_vendor_deploy)"
 cd "${repo}"
+git checkout develop --quiet
 echo "dirty" >> README.md
 assert_rejected_unchanged 1 "Working tree is dirty" "D15 tracked edit"
 git checkout -- README.md
@@ -334,7 +340,7 @@ repo="$(tf_fixture_repo "deploy-ahead" 0.1.0 tf_vendor_deploy)"
 cd "${repo}"
 remote_sandbox="$(git ls-remote origin refs/heads/sandbox | awk '{print $1}')"
 git commit --allow-empty -m "Unpushed sandbox commit" --quiet
-t_run just deploy
+t_run just deploy-test
 assert_rc 1 "D17: rejected"
 assert_contains "${T_ERR}" "has unpushed commits" "D17: explains unpushed commits"
 assert_eq "" "${T_OUT}" "D17: stdout empty"
@@ -354,14 +360,14 @@ git clone --quiet --branch sandbox "${TF_TMP}/deploy-behind.git" "${other}"
   git push origin sandbox --quiet
 )
 cd "${repo}"
-t_run just deploy
+t_run just deploy-test
 assert_rc 1 "D18: rejected"
 assert_contains "${T_ERR}" "Base mismatch" "D18: explains base mismatch"
 assert_eq "0" "$(local_release_count)" "D18: no local candidate"
 assert_eq "" "$(remote_release_heads)" "D18: no remote candidate"
 assert_eq "absent" "$(lock_state)" "D18: lock released"
 git pull --ff-only --quiet
-t_run just deploy
+t_run just deploy-test
 assert_rc 0 "D18: retry after pull succeeds"
 assert_candidate test-only 0.1.1 sandbox "D18 retry"
 cd "${orig_dir}"
@@ -370,7 +376,7 @@ t_case "D19: Base branch missing on the remote"
 repo="$(tf_fixture_repo "deploy-no-remote-base" 0.1.0 tf_vendor_deploy)"
 cd "${repo}"
 git push --quiet origin :sandbox
-t_run just deploy
+t_run just deploy-test
 assert_rc 1 "D19: rejected"
 assert_contains "${T_ERR}" "Failed to fetch base branch" "D19: explains missing remote base"
 assert_eq "0" "$(local_release_count)" "D19: no local candidate"
@@ -390,7 +396,7 @@ git clone --quiet --branch main "${TF_TMP}/deploy-remote-collision.git" "${other
   git push --quiet origin "refs/remotes/origin/main:refs/heads/${collide}"
 )
 remote_before="$(git ls-remote origin "refs/heads/${collide}" | awk '{print $1}')"
-t_run just deploy
+t_run just deploy-test
 assert_rc 1 "D20: rejected"
 assert_contains "${T_ERR}" "Branch collision" "D20: explains branch collision"
 assert_eq "${remote_before}" "$(git ls-remote origin "refs/heads/${collide}" | awk '{print $1}')" "D20: remote candidate ref unchanged"
@@ -410,7 +416,7 @@ while read -r old new ref; do
 done
 EOF
 chmod +x "${TF_TMP}/deploy-push-reject.git/hooks/pre-receive"
-t_run just deploy
+t_run just deploy-test
 assert_rc nonzero "D21: push rejection fails deploy"
 assert_eq "" "${T_OUT}" "D21: stdout empty"
 assert_contains "${T_ERR}" "Push failed" "D21: push failure reported"
@@ -425,7 +431,7 @@ cd "${repo}"
 git tag 0.1.1 main
 git push --quiet origin refs/tags/0.1.1
 git tag -d 0.1.1 >/dev/null
-t_run just deploy
+t_run just deploy-test
 assert_rc 1 "D22: rejected"
 assert_contains "${T_ERR}" "Tag collision" "D22: explains tag collision"
 assert_eq "0" "$(local_release_count)" "D22: no local candidate"
@@ -442,7 +448,7 @@ tf_vendor_deploy_nested() {
 }
 repo="$(tf_fixture_repo "deploy-nested" 0.1.0 tf_vendor_deploy_nested)"
 cd "${repo}/pkg/a/b"
-t_run just deploy
+t_run just deploy-test
 assert_rc 0 "D23: deploy from nested directory succeeds"
 assert_not_contains "${T_ERR}" "decoy" "D23: decoy script not used"
 cd "${repo}"
@@ -463,7 +469,7 @@ git -C "${inner}" checkout -b sandbox --quiet
 git -C "${inner}" commit --allow-empty -m "Inner commit" --quiet
 inner_before="$(git -C "${inner}" for-each-ref --format='%(refname) %(objectname)'; git -C "${inner}" symbolic-ref HEAD; git -C "${inner}" rev-parse HEAD)"
 cd "${inner}"
-t_run just deploy
+t_run just deploy-test
 assert_rc 0 "D24: deploy from inner repository succeeds"
 assert_eq "deploy-inner-repo" "$(out_kv project)" "D24: outer repository deployed"
 cd "${repo}"
@@ -474,9 +480,52 @@ t_case "D25: Same-named tag does not interfere with branch detection"
 repo="$(tf_fixture_repo "deploy-samename-tag" 0.1.0 tf_vendor_deploy)"
 cd "${repo}"
 git tag sandbox
-t_run just deploy
+t_run just deploy-test
 assert_rc 0 "D25: deploy succeeds when tag matches branch name"
 assert_candidate test-only 0.1.1 sandbox "D25"
+cd "${orig_dir}"
+
+t_case "D26: Production deploy commands reject sandbox before preparation"
+for recipe in deploy deploy-minor deploy-major; do
+  repo="$(tf_fixture_repo "deploy-production-guard-${recipe}" 0.1.0 tf_vendor_deploy)"
+  cd "${repo}"
+  before="$(tf_snapshot "${repo}")"
+  adapter_log="${TF_TMP}/${recipe}-adapter.log"
+  t_run env STUB_LOG="${adapter_log}" just "${recipe}"
+  assert_rc 3 "D26 ${recipe}: sandbox is rejected"
+  assert_contains "${T_ERR}" "production deploy requires 'develop'" "D26 ${recipe}: names production base"
+  assert_contains "${T_ERR}" "just deploy-test" "D26 ${recipe}: explains explicit test command"
+  assert_eq "" "${T_OUT}" "D26 ${recipe}: no candidate output"
+  assert_eq "${before}" "$(tf_snapshot "${repo}")" "D26 ${recipe}: no refs, fetch, lock or worktree changes"
+  assert_eq absent "$(test -e "${adapter_log}" && echo present || echo absent)" "D26 ${recipe}: adapter never executes"
+  cd "${orig_dir}"
+done
+
+t_case "D27: Explicit test mode rejects every non-test branch without changes"
+repo="$(tf_fixture_repo "deploy-test-guard" 0.1.0 tf_vendor_deploy)"
+cd "${repo}"
+for branch in develop main feature/test-guard release/test/0.1.1-000000000000; do
+  if git show-ref --verify --quiet "refs/heads/${branch}"; then
+    git checkout --quiet "${branch}"
+  else
+    git checkout --quiet -b "${branch}"
+  fi
+  assert_rejected_unchanged 3 'Refusing to deploy' "D27 ${branch}" just deploy-test
+  assert_rejected_unchanged 3 'Refusing to deploy' "D27 driver ${branch}" bash scripts/release-deploy.sh --test-only patch
+done
+git checkout --quiet --detach sandbox
+assert_rejected_unchanged 3 'detached HEAD' 'D27 detached' just deploy-test
+cd "${orig_dir}"
+
+t_case "D28: Test bump inputs are validated and quoted"
+repo="$(tf_fixture_repo "deploy-test-usage" 0.1.0 tf_vendor_deploy)"
+cd "${repo}"
+# shellcheck disable=SC2016 # Deliberate literal shell syntax must never execute.
+for bump in invalid 'patch minor' 'patch; touch injected' '$(touch injected)' '--mode production'; do
+  assert_rejected_unchanged 2 'Usage: release-deploy.sh' "D28 ${bump}" just deploy-test "${bump}"
+done
+assert_eq absent "$(test -e injected && echo present || echo absent)" 'D28: bump never executes shell commands'
+assert_rejected_unchanged 2 'Usage: release-deploy.sh' 'D28 duplicate test flag' bash scripts/release-deploy.sh --test-only --test-only patch
 cd "${orig_dir}"
 
 t_case "No Cargo/Rust toolchain was invoked by any deploy scenario"

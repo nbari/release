@@ -135,9 +135,18 @@ just release-candidates
 just release-status X.Y.Z --json
 ```
 
-Preparation creates `release/X.Y.Z-<base12>` with a version-bump commit. On the
-test base it creates `release/test/...`, which cannot be promoted. CI tests the
-exact source, packages targets, verifies manifest/checksums and retains production
+`deploy`, `deploy-minor` and `deploy-major` require the configured production base
+(`develop` by default). Preparation creates `release/X.Y.Z-<base12>` with a
+version-bump commit. On other branches these commands fail before fetching or
+creating a candidate. To test packaging explicitly without production promotion:
+
+```bash
+git switch sandbox
+just deploy-test               # patch; or: just deploy-test minor / major
+```
+
+This creates `release/test/...`, which cannot be promoted. CI tests the exact
+source, packages targets, verifies manifest/checksums and retains production
 candidate bytes. See [branch lifecycle](docs/BRANCHES.md).
 
 ## Promoting Releases

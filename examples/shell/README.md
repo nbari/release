@@ -53,6 +53,10 @@ just release-promote release/X.Y.Z-<base12> <candidate-sha> --dry-run
 just release-promote release/X.Y.Z-<base12> <candidate-sha>
 ```
 
+`just deploy` requires `develop` and rejects `sandbox`. For packaging tests,
+switch to `sandbox` and run `just deploy-test` (or `just deploy-test minor` /
+`just deploy-test major`). These candidates can never be promoted.
+
 The executable [adapter](tools/adapter.sh) implements all six protocol commands.
 Repository-native integration tests install a real bundle into a shell consumer
 and run preparation, candidate verification, signed promotion, failed publication

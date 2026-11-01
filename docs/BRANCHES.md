@@ -24,8 +24,12 @@ original bootstrap commit until its first separately authorized production
 promotion. This intentional difference is not a request to synchronize main.
 
 Candidate branches are create-only identities with one version bump commit on
-the recorded base. Test candidates are `release/test/X.Y.Z-base12` and cannot
-be promoted. Fixes belong on the base followed by a fresh candidate. Never
+the recorded base. `just deploy`, `just deploy-minor` and `just deploy-major`
+require `production_base` (`develop` by default). They reject sandbox without
+fetching or preparing anything. Use `just deploy-test [patch|minor|major]` only
+on `test_base` (`sandbox` by default). Test candidates are
+`release/test/X.Y.Z-base12` and cannot be promoted. Fixes belong on the base
+followed by a fresh candidate. Never
 rebase or amend a pushed candidate to repair it.
 
 `release-flow-storage` is an independent protected Git metadata history, never

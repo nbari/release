@@ -52,7 +52,7 @@ git add .
 git -c core.hooksPath=/dev/null commit --quiet -m 'Install shell consumer test'
 git push --quiet -u origin sandbox
 base="$(git rev-parse HEAD)"
-just deploy
+just deploy-test
 
 # Rejected candidates deliberately change only test data/configuration. They
 # cannot be promoted, and no publishing destination or credential is configured.

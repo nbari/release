@@ -511,7 +511,7 @@ t_run bash "$github_profile/install.sh" --target "$repo"
 assert_rc 1 "B16: profile validation rejects a redirected consumer configuration"
 assert_eq absent "$(exists "$repo/.release-flow-bundle.json")" "B16: redirected config writes nothing"
 
-t_case "B17: GitHub profile preserves all three Just deploy commands"
+t_case "B17: GitHub profile preserves production and explicit test deploy commands"
 for recipe in deploy deploy-minor deploy-major; do
   repo="$(tf_fixture_repo "profile-$recipe")"
   bash "$github_profile/install.sh" --target "$repo" >/dev/null 2>&1
@@ -519,13 +519,25 @@ for recipe in deploy deploy-minor deploy-major; do
   git -C "$repo" add .
   git -C "$repo" commit --quiet -m "Install the consumer tooling"
   git -C "$repo" push --quiet origin sandbox
+  git -C "$repo" checkout --quiet -B develop
+  git -C "$repo" push --quiet origin develop
   before="$(git -C "$repo" rev-parse HEAD)"
   t_run just --justfile "$repo/.justfile" --working-directory "$repo" "$recipe"
   assert_rc 0 "B17: $recipe creates a candidate without omitted scripts"
-  assert_contains "$T_OUT" 'mode=test-only' "B17: $recipe stays test-only on sandbox"
+  assert_contains "$T_OUT" 'mode=production' "B17: $recipe selects production on develop"
   case "$recipe" in deploy) expected=0.1.1 ;; deploy-minor) expected=0.2.0 ;; deploy-major) expected=1.0.0 ;; esac
   assert_contains "$T_OUT" "version=$expected" "B17: $recipe selects the correct version"
   assert_eq "$before" "$(git -C "$repo" rev-parse HEAD)" "B17: $recipe preserves the base commit"
   assert_eq 0.1.0 "$(cat "$repo/VERSION")" "B17: $recipe preserves the working version"
+  git -C "$repo" checkout --quiet sandbox
+  before="$(tf_snapshot "$repo")"
+  t_run just --justfile "$repo/.justfile" --working-directory "$repo" "$recipe"
+  assert_rc 3 "B17: $recipe refuses sandbox"
+  assert_eq "$before" "$(tf_snapshot "$repo")" "B17: $recipe rejection leaves Git unchanged"
+  case "$recipe" in deploy) bump="patch" ;; deploy-minor) bump="minor" ;; deploy-major) bump="major" ;; esac
+  t_run just --justfile "$repo/.justfile" --working-directory "$repo" deploy-test "$bump"
+  assert_rc 0 "B17: explicit test $bump creates a candidate"
+  assert_contains "$T_OUT" 'mode=test-only' "B17: explicit test $bump stays test-only"
+  assert_contains "$T_OUT" "version=$expected" "B17: explicit test $bump selects the correct version"
 done
 t_finish

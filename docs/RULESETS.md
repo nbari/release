@@ -59,7 +59,7 @@ reports `Candidate OK`. `release.yml` publishes on the signed tag; it is not a r
 | Actor | Can do | How |
 | --- | --- | --- |
 | Contributors | Pull requests to `develop` | `develop-review` |
-| Owner | `sandbox`, `just deploy` (creates `release/**`) | write access |
+| Owner | `just deploy` from `develop`, `just deploy-test` from `sandbox` (creates `release/**`) | write access |
 | Release operator | `just release-promote` | an authorized repository administrator using their existing Git credentials through `promotion.push_remote`, plus a signing key registered on the tagger's GitHub account (`github` mode) or listed in the committed allowed signers file (`allowed-signers` mode). gh token: read actions and rules; `actions:write` to dispatch retries. Storage: read only. |
 | `candidate.yml` `retain` job | write `blobs/` and `candidates/` | `candidate-storage` environment; OIDC role limited to PutObject with `s3:if-none-match` enforced by the bucket policy, plus GetObject/ListBucket on the same prefixes (an existing blob or record is read back and compared instead of overwritten) |
 | `release.yml` jobs | one channel each | `publish-<channel>` environments (deployment refs: `main`, `develop`, tags `*.*.*`); storage role: Get/List everywhere (GetObject verifies existing create-only records and authorizes conditional lock deletes), Put on `releases/`, `ledger/`, `locks/`, `pointers/`, Delete only on `locks/` (always `If-Match` on the lock's ETag, after checking it names the releasing attempt) |

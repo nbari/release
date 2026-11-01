@@ -291,11 +291,24 @@ just release-promote release/X.Y.Z-<base12> <candidate-sha> --dry-run
 just release-promote release/X.Y.Z-<base12> <candidate-sha>
 ```
 
-`deploy-minor` and `deploy-major` change the bump. Preparation leaves the source
+`deploy`, `deploy-minor` and `deploy-major` require `production_base` (`develop`
+by default); they reject `sandbox` before fetching, locking or running the adapter.
+For an explicit test-only candidate, use the configured `test_base`:
+
+```bash
+git switch sandbox
+just deploy-test               # patch
+just deploy-test minor         # alternatively choose minor or major
+```
+
+Choose one bump per candidate. Test-only candidates cannot be promoted.
+Older installed bundles automatically chose test mode on sandbox; upgrade through
+the installer to adopt this explicit interface. Do not edit the managed recipes.
+
+`deploy-minor` and `deploy-major` change the production bump. Preparation leaves the source
 branch unchanged and pushes a create-only candidate. CI validates its trailers,
 exact source SHA and workflow/runtime pin, builds its targets and retains its
-manifest and verified artifacts. `sandbox` deploys test-only candidates that
-cannot be promoted. Promotion requires approved `develop` ancestry, current
+manifest and verified artifacts. Promotion requires approved `develop` ancestry, current
 bases, passing exact-SHA candidate CI, retained evidence, signing authorization
 and the configured authorized push identity. It atomically advances `main` and
 `develop` and creates an immutable signed tag. The default rules authorize
