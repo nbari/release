@@ -5,7 +5,7 @@ workflows and the local Just module are complementary interfaces to the same
 release infrastructure. Publishing a GitHub Release does **not** by itself
 activate a Marketplace listing.
 
-The Action name is **Release Flow Provenance**. On 2026-10-31, an exact-name
+The Action name is **Release Flow Provenance**. On 2026-11-01, an exact-name
 Marketplace/web search found no conflicting listing. The name is descriptive,
 is not a Marketplace category or a GitHub feature, and contains spaces so it
 cannot equal a GitHub account login. Search is not a reservation: the owner must
@@ -87,7 +87,7 @@ from `pull_request_target` or another privileged workflow.
    equals that commit, with `source_tree_clean: true`.
 2. Keep the repository public and BSD-3-Clause licensed. GitHub asks action
    repositories to contain only metadata, code and supporting files needed for
-   the action. The reference CLI, workflow engine, examples and tests here
+   the action. The workflow engine, adapters, examples and tests here
    support this release product; avoid adding unrelated applications or assets.
    There must be one root metadata file; no compiled Node distribution is needed.
 3. Provision durable storage, signing and the [release rulesets](RULESETS.md)
@@ -147,7 +147,7 @@ never fix a mismatch by relaxing provenance checks. See [ADOPTION.md](ADOPTION.m
 - **Release exists but listing absent:** complete the Marketplace UI steps on
   the existing release. Do not move/delete tags or rebuild its artifacts.
 
-## Official references (checked 2026-10-31)
+## Official references (checked 2026-11-01)
 
 - [Marketplace prerequisites, naming and owner UI](https://docs.github.com/en/actions/how-tos/create-and-publish-actions/publish-in-github-marketplace)
 - [Action metadata syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/metadata-syntax)

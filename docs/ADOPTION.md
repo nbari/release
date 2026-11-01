@@ -1,6 +1,6 @@
-# Adopt Release Flow
+# Adopt Release
 
-Your application supplies an adapter. Release Flow supplies candidate validation,
+Your application supplies an adapter. Release supplies candidate validation,
 packaging coordination, durable retention, signed promotion and independent
 publishers. The Marketplace Action checks configuration in a step; reusable
 workflows orchestrate jobs; the installed Just module handles local operations.

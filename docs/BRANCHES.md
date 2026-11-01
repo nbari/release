@@ -18,6 +18,11 @@ rewritten by release operations. These branches need not be equal during work;
 a successful promotion makes `main` and `develop` equal to the validated candidate.
 Fast-forward `sandbox` afterward only if no work would be lost.
 
+During the initial migration, `develop` is the public default branch and contains
+the framework implementation. `main` retains the destination repository's
+original bootstrap commit until its first separately authorized production
+promotion. This intentional difference is not a request to synchronize main.
+
 Candidate branches are create-only identities with one version bump commit on
 the recorded base. Test candidates are `release/test/X.Y.Z-base12` and cannot
 be promoted. Fixes belong on the base followed by a fresh candidate. Never
