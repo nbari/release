@@ -1,0 +1,2 @@
+# Test-only YAML parser, also used by yamllint. No Action runtime dependency.
+PyYAML==6.0.3

@@ -1,0 +1,8 @@
+/target/
+/.direnv/
+*.swp
+.DS_Store
+
+/dist/
+/.venv/
+__pycache__/
