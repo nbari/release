@@ -13,6 +13,8 @@
 # returned, with it every page as its own JSON array (like gh).
 # MOCK_GH_FAULT=upload-fail:<n> fails the n-th upload;
 # MOCK_GH_FAULT=auth fails `gh auth status`.
+# MOCK_GH_DRAFT_HIDDEN_READS hides a newly created release for N list reads.
+# MOCK_GH_FAULT=list-error-after-create fails listing once a draft exists.
 set -euo pipefail
 
 root="${MOCK_GH_ROOT:?MOCK_GH_ROOT is required}"
@@ -76,7 +78,7 @@ release_json() {
 }
 
 api() {
-  local endpoint="" jq_expr="" out f r paginate=false size
+  local endpoint="" jq_expr="" out f r paginate=false size hidden
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --jq|-q) jq_expr="$2"; shift 2 ;;
@@ -92,6 +94,12 @@ api() {
     out="$(
       for d in "$(releases_dir "${r}")"/*/; do
         [[ -f "${d}meta.json" ]] || continue
+        [[ ! -f "${d}/list-error" ]] || die 'HTTP 502: release listing unavailable'
+        hidden="$(cat "${d}/list-hidden-reads" 2>/dev/null || echo 0)"
+        if (( hidden > 0 )); then
+          printf '%s\n' "$(( hidden - 1 ))" > "${d}/list-hidden-reads"
+          continue
+        fi
         release_json "${d%/}"
       done | jq -s 'sort_by(.id) | reverse'
     )"
@@ -168,6 +176,10 @@ release_cmd() {
       mkdir -p "${d}/assets"
       jq -n --argjson id "${id}" --arg tag "${tag}" --argjson draft "${draft}" --arg title "${title}" --arg notes "${notes}" \
         '{id: $id, tag_name: $tag, name: $title, draft: $draft, body: $notes}' > "${d}/meta.json"
+      if [[ -n "${MOCK_GH_DRAFT_HIDDEN_READS:-}" ]]; then
+        printf '%s\n' "${MOCK_GH_DRAFT_HIDDEN_READS}" > "${d}/list-hidden-reads"
+      fi
+      if [[ "${MOCK_GH_FAULT:-}" == list-error-after-create ]]; then touch "${d}/list-error"; fi
       printf 'https://github.com/%s/releases/tag/%s\n' "${r}" "${tag}"
       ;;
     upload)

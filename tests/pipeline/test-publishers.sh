@@ -442,4 +442,58 @@ publish "${repo}" 0.1.1 github-release
 assert_rc 0 "PB14: a reconciled release is complete"
 assert_eq "" "$(gh_writes)" "PB14: no further writes"
 
+# Read-after-write timing is simulated; never sleep through a real timeout.
+cat > "${TF_MOCKBIN}/sleep" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${MOCK_GH_ROOT}/sleep.log"
+EOF
+chmod +x "${TF_MOCKBIN}/sleep"
+
+t_case "PB15: A newly created draft becomes visible after delayed list reads"
+repo="$(tf_release_repo pb15)"
+tf_promoted_release "${repo}" patch
+remote_before="$(tf_remote_refs "${TF_TMP}/pb15.git")"
+packages_before="$(grep -c '^package$' "${STUB_LOG}" || true)"
+reset_gh_calls
+: > "${MOCK_GH_ROOT}/sleep.log"
+MOCK_GH_DRAFT_HIDDEN_READS=2 publish "${repo}" 0.1.1 github-release
+assert_rc 0 'PB15: first publication succeeds despite delayed draft visibility'
+assert_eq succeeded "$(out_kv state)" 'PB15: successful receipt'
+rel="$(release_dir pb15 0.1.1)"
+assert_eq false "$(jq -r .draft "${rel}/meta.json")" 'PB15: same draft is published'
+assert_eq 1 "$(grep -c '^gh release create ' "${MOCK_GH_ROOT}/calls.log" || true)" 'PB15: creates the release exactly once'
+assert_eq $'1\n2' "$(cat "${MOCK_GH_ROOT}/sleep.log")" 'PB15: bounded backoff waits for visibility'
+assert_eq "${remote_before}" "$(tf_remote_refs "${TF_TMP}/pb15.git")" 'PB15: tags and branches unchanged'
+assert_eq "${packages_before}" "$(grep -c '^package$' "${STUB_LOG}" || true)" 'PB15: no rebuild while waiting'
+
+t_case "PB16: Visibility timeout fails closed and preserves the draft for retry"
+repo="$(tf_release_repo pb16)"
+tf_promoted_release "${repo}" patch
+reset_gh_calls
+: > "${MOCK_GH_ROOT}/sleep.log"
+MOCK_GH_DRAFT_HIDDEN_READS=100 publish "${repo}" 0.1.1 github-release
+assert_rc 1 'PB16: permanently absent draft fails'
+assert_contains "${T_ERR}" 'not visible after creation' 'PB16: actionable timeout error'
+rel="$(release_dir pb16 0.1.1)"
+assert_eq true "$(jq -r .draft "${rel}/meta.json")" 'PB16: original draft retained'
+assert_eq 0 "$(find "${rel}/assets" -type f | wc -l | tr -d ' ')" 'PB16: no uploads without verified draft evidence'
+assert_eq 1 "$(grep -c '^gh release create ' "${MOCK_GH_ROOT}/calls.log" || true)" 'PB16: no repeated create'
+assert_eq $'1\n2\n4\n8\n16\n30' "$(cat "${MOCK_GH_ROOT}/sleep.log")" 'PB16: retry budget is bounded'
+printf '0\n' > "${rel}/list-hidden-reads"
+publish "${repo}" 0.1.1 github-release
+assert_rc 0 'PB16: independent retry reuses the now-visible draft'
+assert_eq 1 "$(grep -c '^gh release create ' "${MOCK_GH_ROOT}/calls.log" || true)" 'PB16: recovery never creates a second release'
+assert_eq "$(desired_assets)" "$(release_assets "${rel}")" 'PB16: recovered assets are original retained bytes'
+
+t_case "PB17: An API failure after draft creation is not treated as absence"
+repo="$(tf_release_repo pb17)"
+tf_promoted_release "${repo}" patch
+reset_gh_calls
+: > "${MOCK_GH_ROOT}/sleep.log"
+MOCK_GH_FAULT=list-error-after-create publish "${repo}" 0.1.1 github-release
+assert_rc 1 'PB17: unavailable evidence fails'
+assert_eq '' "$(cat "${MOCK_GH_ROOT}/sleep.log")" 'PB17: API failure does not enter the absent-draft retry loop'
+assert_eq 1 "$(grep -c '^gh release create ' "${MOCK_GH_ROOT}/calls.log" || true)" 'PB17: one draft remains recoverable'
+assert_eq true "$(jq -r .draft "$(release_dir pb17 0.1.1)/meta.json")" 'PB17: never publishes without evidence'
+
 t_finish
