@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "kind": "release-binding",
+  "project": "release",
+  "repository": "nbari/release",
+  "version": "0.1.0",
+  "candidate_commit": "b052911198824598bf38a0b0b1d77748f1024121",
+  "base_commit": "7cce5979b29427590171bc5922289ef41f76a451",
+  "candidate_branch": "release/0.1.0-7cce5979b294",
+  "run_id": "41424493952",
+  "run_attempt": 1,
+  "manifest_sha256": "282ed5d7561d0c789377bcd6051c9f62c578f971521544495674e2e3d88a3c8d",
+  "sha256sums_sha256": "b73c7710e50e860750df61767f4486b3a231aaf1444cd91d5a88fbf0aa97c519",
+  "storage": "github://nbari/release",
+  "tag": "0.1.0",
+  "tag_object": "f41b3dc5643620c90e8f21c04856ae3b1a6d6105",
+  "storage_uri": "github://nbari/release"
+}
