@@ -32,7 +32,9 @@ validation and whitespace checks passed. The tested framework source snapshot is
 
 The isolated shell repository is not the release-flow Rust application. Its
 candidate mode is test-only, retention was skipped, and no tag or application
-release was published. The Rust consumer integration remains a later task.
+release was published. The initial migration kept Rust adoption separate. The Rust consumer has since
+adopted the public bundle and reusable workflows; see
+[FUTURE_INTEGRATION.md](FUTURE_INTEGRATION.md) for release-by-release validation.
 
 - [Framework CI after adoption pin updates](https://github.com/nbari/release/actions/runs/41295479077): success at `c261a0f0dd5ddff657a3e21680a0f20bb03f913e`.
 - [Optional Cargo adapter fixture and core CI](https://github.com/nbari/release/actions/runs/41296643367): success at the same source; the optional fixture does not build the release-flow application.
@@ -53,3 +55,17 @@ formatting, Clippy, 27 unit tests, eight CLI integration tests, release build an
 CLI smoke checks without this framework. Historical tags, releases, assets and
 the storage branch remain in that repository. See [branch lifecycle](BRANCHES.md)
 for this framework's default-branch bootstrap policy.
+
+## Initial framework release validation
+
+The first independent framework version is 0.1.0, published on GitHub before
+Marketplace activation. Its production candidate must pass exact-SHA validation
+and durable retention before signed promotion. Marketplace remains deferred
+pending validation of that released SHA through the Rust consumer.
+
+The GitHub publisher has regression coverage for delayed visibility of a newly
+created draft, a bounded visibility timeout, and API failure after creation. It
+creates a draft once, requests fresh listing responses and waits up to 61 seconds
+for draft visibility before any upload. Unknown evidence fails closed; the same
+draft remains independently recoverable. An observed conflict is never retried
+as absence or used to modify a published release.

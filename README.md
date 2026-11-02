@@ -13,8 +13,9 @@ Just/Bash operations, and a small project-adapter protocol. Rust, Node.js and
 Docker are not runtime requirements of the composite Action.
 
 The Rust CLI [release-flow](https://github.com/nbari/release-flow) is a separate
-application. Neither repository needs the other to build or test. Future adoption
-by that project will use the same public installation path as any consumer.
+application and an external consumer of this framework. It installs the public
+bundle and pins the Action and reusable workflows by full SHA. Neither repository
+needs a second source checkout to build or run its own tests.
 
 ## Why Use It?
 
@@ -42,9 +43,10 @@ A step Action cannot invoke the complete multi-job release workflow.
 
 ## Quick Start
 
-No production distribution has been published from this new repository yet.
-Use the clean pinned source installation below. The migration origin and file
-ownership are recorded in [MIGRATION_INVENTORY.md](docs/MIGRATION_INVENTORY.md).
+Install a [verified published bundle](docs/ADOPTION.md#installation), or use the
+clean pinned source installation below. Before a production bundle is available,
+use the source path. Migration origin and file ownership are recorded in
+[MIGRATION_INVENTORY.md](docs/MIGRATION_INVENTORY.md).
 
 Local operations need Git 2.31+, Bash 3.2+, jq 1.6+, Just 1.27+, GitHub CLI and
 standard Unix tools. Linux/GNU tar is required for bundle creation and packaging.
@@ -54,7 +56,8 @@ Application build tools belong to the adapter.
 
 The composite **Release Flow Provenance** Action validates configuration and the
 declared adapter contract without executing consumer code or mutating refs.
-Marketplace publication is intentionally deferred until after migration validation.
+The first framework release starts at 0.1.0 on GitHub. Marketplace publication
+is deferred until that release has been validated through the Rust consumer.
 
 ```yaml
 permissions:
@@ -66,7 +69,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: nbari/release@bf69405c3904bc34e9945665a95ddf152acce4f5
+      - uses: nbari/release@6ebfa8f013a7f7a43bc6d6349615fac3f37e8887
         with:
           operation: validate
           adapter: tools/adapter.sh
@@ -90,7 +93,7 @@ permissions:
   contents: read
 jobs:
   candidate:
-    uses: nbari/release/.github/workflows/candidate.yml@bf69405c3904bc34e9945665a95ddf152acce4f5
+    uses: nbari/release/.github/workflows/candidate.yml@6ebfa8f013a7f7a43bc6d6349615fac3f37e8887
     with:
       adapter: tools/adapter.sh
     permissions:
@@ -99,7 +102,7 @@ jobs:
 ```
 
 The canonical publisher is
-`nbari/release/.github/workflows/release.yml@bf69405c3904bc34e9945665a95ddf152acce4f5`.
+`nbari/release/.github/workflows/release.yml@6ebfa8f013a7f7a43bc6d6349615fac3f37e8887`.
 [Complete callers](docs/ADOPTION.md#reusable-workflows) include tag triggers and
 per-channel dispatch inputs. Candidate builds receive no publisher secrets.
 Only retention obtains storage write access. Unconfigured channels are skipped;
@@ -190,7 +193,7 @@ reviewed source commit; no release-flow binary or Cargo project is needed:
 RF_TARGET="$(pwd)"
 RF_SOURCE="$(mktemp -d)"
 RF_OUT="$(mktemp -d)"
-RF_SHA=bf69405c3904bc34e9945665a95ddf152acce4f5
+RF_SHA=6ebfa8f013a7f7a43bc6d6349615fac3f37e8887
 git clone https://github.com/nbari/release.git "$RF_SOURCE/source"
 git -C "$RF_SOURCE/source" checkout --detach "$RF_SHA"
 test -z "$(git -C "$RF_SOURCE/source" status --porcelain)"
