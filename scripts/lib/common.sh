@@ -2,6 +2,8 @@
 # Shared helpers for release-flow scripts. Sourced, never executed.
 # Must stay compatible with bash 3.2 (macOS default): no associative arrays,
 # mapfile, ${x,,} or [[ -v ]].
+# Piped readers must consume all input: early exit can SIGPIPE the producer
+# under pipefail, turning a successful lookup or validation match into failure.
 
 if [[ -n "${RF_COMMON_LOADED:-}" ]]; then
   return 0
@@ -213,9 +215,10 @@ rf_git_fetch() {
   git fetch --no-tags --no-write-fetch-head --refmap= --quiet "$@"
 }
 
-# rf_ls_remote_value <ls-remote-output> <ref>: the object id for the ref.
+# rf_ls_remote_value <ls-remote-output> <ref>: the first exact matching object id.
+# Drain the listing even after a match so large inputs remain pipefail-safe.
 rf_ls_remote_value() {
-  printf '%s\n' "$1" | awk -v r="$2" '$2 == r { print $1; exit }'
+  printf '%s\n' "$1" | awk -v r="$2" '!found && $2 == r { print $1; found = 1 }'
 }
 
 # rf_push_remote: promotion.push_remote, else remote.

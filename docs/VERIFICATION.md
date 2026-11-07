@@ -69,3 +69,28 @@ creates a draft once, requests fresh listing responses and waits up to 61 second
 for draft visibility before any upload. Unknown evidence fails closed; the same
 draft remains independently recoverable. An observed conflict is never retried
 as absence or used to modify a published release.
+
+## Large-input stream validation
+
+Release readers drain piped input while retaining first-match lookup semantics,
+version ordering and strict metadata validation. The large-input regression suite
+exercises remote-only tag and branch collisions, protected managed files, active
+candidate worktrees, status and promotion across thousands of refs, large tag
+bodies, default GPG key selection, archive entry rejection and bundle upgrades.
+Transport and GPG failures after valid output remain failures. Rejected operations
+preserve protected Git state or publication contents, and recovery reuses retained
+artifacts without packaging again or changing the signed tag.
+
+The same regression suite reports 35 failed assertions against the original
+`b052911198824598bf38a0b0b1d77748f1024121` source and passes all 72 assertions with
+the reader fixes. Both `just check` and `just pipeline-test` pass all 15 core suites
+and 1,758 assertions per gate, plus seven metadata tests, with application
+toolchains blocked. Evidence comes from
+local fixtures using real Git transport and SSH signatures, retained filesystem
+artifacts and mocked external destinations.
+
+Bash syntax checks cover all 71 shell scripts. ShellCheck reports no new
+diagnostics relative to the original source; its six existing diagnostics are
+unchanged. YAML validation passes. Actionlint 1.7.12 passes when its unsupported
+`job.workflow_repository`, `job.workflow_ref` and `job.workflow_sha` diagnostics
+are filtered; the workflow and Action files are unchanged by this fix.

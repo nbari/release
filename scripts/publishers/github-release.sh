@@ -126,7 +126,7 @@ write_notes() {
   previous="$(git -C "${RF_PROJECT_DIR}" describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' "${commit}^" 2>/dev/null || true)"
   range="${commit}"
   [[ -z "${previous}" ]] || range="${previous}..${commit}"
-  changes="$(git -C "${RF_PROJECT_DIR}" log --no-merges --format='- %s (%h)' "${range}" 2>/dev/null | head -n 200 || true)"
+  changes="$(git -C "${RF_PROJECT_DIR}" log --max-count=200 --no-merges --format='- %s (%h)' "${range}" 2>/dev/null || true)"
   {
     echo "## Changes"
     echo

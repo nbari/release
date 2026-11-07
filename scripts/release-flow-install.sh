@@ -200,7 +200,7 @@ if [[ -f "${lock_file}" ]]; then
 fi
 
 lock_sha() {
-  printf '%s\n' "${lock_tsv}" | awk -F'\t' -v p="$1" '$1 == p { print $2; exit }'
+  printf '%s\n' "${lock_tsv}" | awk -F'\t' -v p="$1" '!found && $1 == p { print $2; found = 1 }'
 }
 
 # ---------------------------------------------------------------------------

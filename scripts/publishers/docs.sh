@@ -48,7 +48,7 @@ validate() {
   local names types n t count=0
   names="$(tar -tzf "${artifact}" 2>/dev/null)" || { echo "docs: $(basename "${artifact}") is not a gzip tarball" >&2; return 5; }
   types="$(tar -tvzf "${artifact}" 2>/dev/null | cut -c1)"
-  if printf '%s\n' "${types}" | grep -qv '^[-d]$'; then
+  if printf '%s\n' "${types}" | grep -v '^[-d]$' >/dev/null; then
     echo "docs: tarball holds entries that are neither regular files nor directories (links, devices)" >&2
     return 5
   fi

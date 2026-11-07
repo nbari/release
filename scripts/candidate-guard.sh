@@ -181,7 +181,7 @@ if git rev-parse --verify "refs/tags/${branch_version}" >/dev/null 2>&1 || \
 fi
 
 if remote_tags="$(git ls-remote --tags --refs "${config_remote}" 2>/dev/null)"; then
-  if printf '%s\n' "${remote_tags}" | awk '{print $2}' | grep -qxF -e "refs/tags/${branch_version}" -e "refs/tags/v${branch_version}"; then
+  if printf '%s\n' "${remote_tags}" | awk '{print $2}' | grep -xF -e "refs/tags/${branch_version}" -e "refs/tags/v${branch_version}" >/dev/null; then
     echo "Conflicting remote release tag already exists on '${config_remote}' for version ${branch_version}" >&2
     exit 1
   fi

@@ -131,7 +131,7 @@ trap 'exit 143' TERM
 
 git worktree prune
 
-if git worktree list --porcelain | grep -q "^worktree ${WT_ROOT}/wt\."; then
+if git worktree list --porcelain | grep "^worktree ${WT_ROOT}/wt\." >/dev/null; then
   echo "Existing active or stale candidate worktree detected under ${WT_ROOT}." >&2
   echo "Clean up with: git worktree remove --force <path> && git worktree prune" >&2
   exit 1
@@ -263,7 +263,7 @@ if git rev-parse --verify "refs/heads/${candidate_branch}" >/dev/null 2>&1; then
   exit 1
 fi
 
-if printf '%s\n' "${remote_heads}" | grep -q "refs/heads/${candidate_branch}$"; then
+if printf '%s\n' "${remote_heads}" | grep "refs/heads/${candidate_branch}$" >/dev/null; then
   echo "Branch collision: remote branch '${candidate_branch}' already exists on '${cfg_remote}'" >&2
   exit 1
 fi

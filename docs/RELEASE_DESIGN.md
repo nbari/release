@@ -14,6 +14,14 @@ A release candidate progresses through `PREPARED` → `VALIDATING` → `VALIDATE
 
 ## Independent publication
 
+Shell readers in release operations consume their entire piped input, even when
+only the first matching ref, header or version is needed. With `pipefail` enabled,
+an early reader exit can send SIGPIPE to a producer and turn a successful lookup
+into exit 141. In conditional validation, the same failure can hide a real match
+and bypass a collision or unsafe-content rejection. Searches discard unwanted
+output without closing the pipe early; lookups retain their first exact match,
+and producer errors keep their existing failure behavior.
+
 A failed GitHub Release upload should be repaired by rerunning the GitHub publisher for the same version and SHA. It must not trigger rebuilding, retesting unrelated platforms, creating a new tag, or rewriting an existing tag. Image publication should move validated digest references, not rebuild images. Documentation and Helm should be separate recovery domains, with a guard against stale versions overwriting newer `latest` pointers. Every publisher must be idempotent; a retry must either discover identical already-published state or fail on conflicting content.
 
 For immutable GitHub Releases, stage assets in a draft, verify the complete checksum inventory, and publish only after verification. Reruns must not rely on overwriting assets after publication. Retain candidate bundles in durable storage before their temporary Actions artifacts expire. Detect artifacts missing due to retention and fail clearly instead of secretly rebuilding under an old tag.

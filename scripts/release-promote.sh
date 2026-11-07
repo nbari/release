@@ -264,7 +264,7 @@ while IFS= read -r f; do
     .github/*|.justfiles/*|scripts/*|.release-flow.json|.release-flow-bundle.json) protected=true ;;
   esac
   [[ -n "${base_adapter}" && "${f}" == "${base_adapter}" ]] && protected=true
-  if [[ -n "${lock_paths}" ]] && printf '%s\n' "${lock_paths}" | grep -qxF "${f}"; then
+  if [[ -n "${lock_paths}" ]] && printf '%s\n' "${lock_paths}" | grep -xF "${f}" >/dev/null; then
     protected=true
   fi
   if [[ "${protected}" == "true" ]]; then
@@ -302,7 +302,7 @@ for t in "${version}" "v${version}"; do
     pf_fail PF10 "tag ${t} already exists on ${push_remote}"
   fi
 done
-highest="$(rf_semver_tags "${ls_tags}" | head -n 1)"
+highest="$(rf_semver_tags "${ls_tags}" | sed -n '1p')"
 if [[ -n "${highest}" && "$(rf_semver_cmp "${version}" "${highest}")" != "1" ]]; then
   pf_fail PF10 "version ${version} is not greater than the released ${highest} on ${push_remote}"
 fi
@@ -458,7 +458,7 @@ elif [[ "${gpg_format}" == "openpgp" ]]; then
   [[ "${mode}" != "allowed-signers" ]] || pf_fail PF19 "allowed-signers verification requires gpg.format=ssh"
   if [[ -z "${signing_key}" ]]; then
     command -v gpg >/dev/null 2>&1 || pf_fail PF19 "no user.signingkey and no gpg for a default key"
-    signing_key="$(gpg --list-secret-keys --with-colons 2>/dev/null | awk -F: '$1 == "sec" { print $5; exit }')"
+    signing_key="$(gpg --list-secret-keys --with-colons 2>/dev/null | awk -F: '!found && $1 == "sec" { print $5; found = 1 }')"
     [[ -n "${signing_key}" ]] || pf_fail PF19 "no signing key: set user.signingkey or create a GPG key"
   fi
   if ! rf_gh_signing_key_registered gpg "${signing_key}" 2>"${WORK}/gh.err"; then
@@ -524,7 +524,7 @@ else
   tag_object="$(git rev-parse --verify "refs/tags/${version}")"
   tag_how="created"
 fi
-if ! git cat-file tag "${tag_object}" | grep -qE '^-----BEGIN (SSH|PGP) SIGNATURE-----$'; then
+if ! git cat-file tag "${tag_object}" | grep -E '^-----BEGIN (SSH|PGP) SIGNATURE-----$' >/dev/null; then
   rf_die "[T1] local tag ${version} is not signed; delete it (git tag -d ${version}) and fix signing" 3
 fi
 if [[ "${mode}" == "allowed-signers" ]] && \
@@ -553,8 +553,8 @@ push_rc=$?
 set -e
 printf '%s\n' "${push_out}" | sed 's/^/[T3] /' >&2
 push_desc="ambiguous"
-if printf '%s\n' "${push_out}" | grep -q '^Done$'; then
-  if ! printf '%s\n' "${push_out}" | grep -E '^[ +*=!-]	' | grep -qvE '^!	'; then
+if printf '%s\n' "${push_out}" | grep '^Done$' >/dev/null; then
+  if ! printf '%s\n' "${push_out}" | grep -E '^[ +*=!-]	' | grep -vE '^!	' >/dev/null; then
     push_desc="rejected"
   fi
 fi

@@ -129,8 +129,8 @@ else
   if [[ -z "${branches}" ]]; then
     rf_die "Unknown version ${version}: no tag and no production candidate branch release/${version}-<base12> on ${remote}" 4
   fi
-  branch="$(printf '%s\n' "${branches}" | grep -E -- "-${dev_sha:0:12}$" | head -n 1 || true)"
-  [[ -n "${branch}" ]] || branch="$(printf '%s\n' "${branches}" | head -n 1)"
+  branch="$(printf '%s\n' "${branches}" | grep -E -- "-${dev_sha:0:12}$" | sed -n '1p' || true)"
+  [[ -n "${branch}" ]] || branch="$(printf '%s\n' "${branches}" | sed -n '1p')"
   commit="$(rf_ls_remote_value "${ls}" "${branch}")"
   branch="${branch#refs/heads/}"
   state="PREPARED"

@@ -60,13 +60,13 @@ rf_tag_parse() {
     return 1
   fi
   raw="$(git cat-file tag "${obj}")" || return 1
-  header="$(printf '%s\n' "${raw}" | awk 'NF == 0 { exit } { print }')"
+  header="$(printf '%s\n' "${raw}" | awk 'NF == 0 { in_body = 1 } !in_body { print }')"
   body="$(printf '%s\n' "${raw}" | awk 'f { print } NF == 0 && !f { f = 1 }' \
     | sed -E '/^-----BEGIN (SSH|PGP) SIGNATURE-----$/,$d')"
   tag_target="$(printf '%s\n' "${header}" | sed -n 's/^object //p')"
   tag_type="$(printf '%s\n' "${header}" | sed -n 's/^type //p')"
   tag_name="$(printf '%s\n' "${header}" | sed -n 's/^tag //p')"
-  subject="$(printf '%s\n' "${body}" | head -n 1)"
+  subject="$(printf '%s\n' "${body}" | sed -n '1p')"
   trailers="$(printf '%s\n' "${body}" | git interpret-trailers --parse)"
   if ! json="$(printf '%s\n' "${trailers}" | RF_TAG_TRAILERS="${RF_TAG_TRAILERS}" jq -R -s '
       ($ENV.RF_TAG_TRAILERS | split("\n") | map(split("\t") | {key: .[0], value: .[1]}) | from_entries) as $map
